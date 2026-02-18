@@ -1,9 +1,11 @@
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect, Http404
 from django.template import loader
-from django.shortcuts import render
-from django.http import Http404
+from django.shortcuts import render, get_object_or_404
+from django.db.models import F
+from django.urls import reverse
 
-from .models import Question
+
+from .models import Question, Choice
 
 # Create your views here.
 def index(request):
@@ -21,14 +23,21 @@ def detail(request, question_id):
         raise Http404("Question not found") 
 
     return render(request, "polls/detail.html", {"question":question})
-    '''
-    exists = Question.objects.filter(pk=question_id).exists()
-    return HttpResponse(f"detail() called. id={question_id}, exists={exists}")
-    '''
+
 
 def result(request, question_id):
-    response = "You are looking at the result of question %s"
-    return HttpResponse(response % question_id)
+    question = get_object_or_404(Question, pk=question_id)
+    return render(request, "polls/result.html", {"question": question})
 
 def vote(request, question_id):
-    return HttpResponse("You are voting on question %s" % question_id)
+    question = get_object_or_404(Question, pk=question_id)
+    try:
+        selected_choice = question.choice_set.get(pk=request.POST["choice"])
+    except (KeyError, Choice.DoesNotExist):
+        # Redisplay the question voting form.
+        return render(request, "polls/detail.html", {"question": question, "error_message":"Can't find the choice"})
+    else:
+        selected_choice.votes = F("votes") + 1
+        selected_choice.save()
+
+    return HttpResponseRedirect(reverse("polls:result", args=(question.id,)))
